@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Type Defense</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #05060f; color: #cfe; font-family: "Courier New", monospace; overflow: hidden; }
+  #wrap { position: relative; width: 100%; height: 100%; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #input {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    width: 320px; padding: 10px 14px; font: bold 22px "Courier New", monospace; text-transform: uppercase;
+    text-align: center; color: #7fffd4; background: #0a0f24; border: 2px solid #7fffd4; border-radius: 6px;
+    outline: none; box-shadow: 0 0 12px #7fffd455; letter-spacing: 3px; z-index: 5;
+  }
+  #input.bad { border-color: #ff3355; background: #3a0a14; box-shadow: 0 0 20px #ff3355; }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(5,6,15,.85); z-index: 10; text-align: center; gap: 10px;
+  }
+  .overlay.hidden { display: none; }
+  h1 { font-size: 56px; margin: 0; color: #7fffd4; text-shadow: 0 0 18px #7fffd4; letter-spacing: 6px; }
+  h2 { font-size: 44px; margin: 0; color: #ff3355; text-shadow: 0 0 18px #ff3355; }
+  p { margin: 4px; font-size: 18px; }
+  button {
+    font: bold 20px "Courier New", monospace; padding: 12px 28px; margin-top: 14px; cursor: pointer;
+    color: #05060f; background: #7fffd4; border: none; border-radius: 6px; box-shadow: 0 0 14px #7fffd4;
+  }
+  button:hover { background: #fff; }
+  .linkbtn { background: none; box-shadow: none; color: #7fffd4; text-decoration: underline; font-size: 18px; padding: 6px; margin-top: 4px; }
+  .linkbtn:hover { background: none; color: #fff; }
+  #nameEntry { display: none; flex-direction: column; align-items: center; gap: 8px; margin: 10px 0 0; }
+  #nameEntry.show { display: flex; }
+  #nameInput { width: 260px; padding: 8px 12px; font: bold 22px "Courier New", monospace; text-align: center; text-transform: uppercase;
+    color: #ffd700; background: #0a0f24; border: 2px solid #ffd700; border-radius: 6px; outline: none; letter-spacing: 3px; }
+  #scoreTable { border-collapse: collapse; font-size: 20px; min-width: 460px; max-width: 92%; }
+  #scoreTable th { color: #c0a0ff; font-size: 15px; letter-spacing: 2px; padding: 4px 12px; border-bottom: 1px solid #7fffd455; }
+  #scoreTable td { padding: 5px 12px; text-align: center; }
+  #scoreTable td.name { text-align: left; color: #e8f0ff; }
+  #scoreTable td.sc { color: #ffd700; font-weight: bold; }
+  #scoreTable tr.me td { background: rgba(255,215,0,.15); }
+  .lvlpick { font-size: 16px; opacity: .85; margin-top: 8px; }
+  .lvlpick input { width: 56px; padding: 4px; font: bold 18px "Courier New", monospace; text-align: center; color: #c0a0ff; background: #0a0f24; border: 2px solid #c0a0ff; border-radius: 4px; outline: none; }
+  .legend span { margin: 0 10px; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <input id="input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20" placeholder="TYPE + ENTER">
+  <div id="start" class="overlay">
+    <h1>TYPE DEFENSE</h1>
+    <p>Type the falling words and press ENTER to blast them.</p>
+    <p class="legend"><span style="color:#00e5ff">SLOW</span><span style="color:#ffd700">EMP</span><span style="color:#39ff6a">SHIELD</span></p>
+    <p class="legend" style="margin-top:2px"><span style="color:#ff3355">RED bomb words: do NOT type them</span></p>
+    <p style="opacity:.7">Tab = mute &nbsp; Esc = pause</p>
+    <button id="startBtn">START</button>
+    <button id="scoresBtn1" class="linkbtn">High Scores</button>
+    <div class="lvlpick">Start at level <input class="lvlInput" type="number" min="1" max="30" value="1"></div>
+  </div>
+  <div id="over" class="overlay hidden">
+    <h2>GAME OVER</h2>
+    <p id="finalScore" style="font-size:26px;color:#ffd700"></p>
+    <p id="finalLevels"></p>
+    <p id="finalTime"></p>
+    <p id="finalCombo"></p>
+    <div id="nameEntry">
+      <p style="color:#ffd700">NEW HIGH SCORE! Enter your name:</p>
+      <input id="nameInput" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="YOUR NAME">
+      <button id="saveBtn">SAVE</button>
+    </div>
+    <button id="againBtn">PLAY AGAIN</button>
+    <button id="scoresBtn2" class="linkbtn">High Scores</button>
+    <div class="lvlpick">Start at level <input class="lvlInput" type="number" min="1" max="30" value="1"></div>
+  </div>
+  <div id="scores" class="overlay hidden" style="z-index:20">
+    <h1 style="font-size:40px">HIGH SCORES</h1>
+    <table id="scoreTable"><thead><tr><th>#</th><th style="text-align:left">NAME</th><th>SCORE</th><th>LEVEL</th><th>TIME</th></tr></thead><tbody></tbody></table>
+    <button id="backBtn">BACK</button>
+  </div>
+  <div id="pause" class="overlay hidden"><h1>PAUSED</h1><p>Press Esc to resume</p></div>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const input = document.getElementById('input');
+  const $ = id => document.getElementById(id);
+  let W = 0, H = 0;
+  function resize() {
+    const d = window.devicePixelRatio || 1;
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W * d; canvas.height = H * d;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+  }
+  let bg = null;
+  window.addEventListener('resize', () => { resize(); bg = null; }); resize();
+
+  // ---------- Word pools ----------
+  const POOLS = {
+    3: 'cat dog sun map key box fan hat jet log net pen ray sky tip van web zip arc bat cup elf fog gem ink joy ace aim air ant ape arm ash axe bag bay bed bee bit bow bus cab cap car cow cry dam dew dig dip dot dry dye ear egg elm end eye fax fig fin fix fly fox fun gap gas gel gym hay hen hip hop hub hut ice jam jar jaw jog jug keg kid kit lab lag lap law leg lid lip mat mix mud mug nap nut oak oar oil orb owl pad paw pea pie pig pin pit pod pop pot rag ram rat rib rim rod rug rum sad sap saw sea shy sip sit six sob sod spy sub tab tag tan tar tea ten toe top toy tub urn vat vet vow wag war wax wig win wit yak yam yes zoo zap'.split(' '),
+    4: 'fire wind star moon rain code byte game lazy tree fish bold dust echo flux grid hack jump kite lava neon acid aura axis beam bell bird bolt bone book boom boot cage calm cape card cave chip city claw clay clip coal coin cold cone core cube curl dark dart dawn deck deep dial dive dome door dove down draw drum duel dune edge face fade fall fang fast fate fern film flag flip foam fork fort frog fuel gate gear gift glow gold gust halo hawk heat helm hero hill hive hook horn hunt icon iron isle jade jolt keen king lake lamp lane leaf lens lime link lion lock loop lord luck lynx mace mask mist mode mole moss myth nest node nova oath onyx opal pack palm path peak pine pipe plan play plot plug pond port rank raze reef ring rink risk road roar rock rope rose ruby rush rust sage sail salt sand scan seal seed ship silk sink skid slab slam slim snow soar sock soil song soul spin spot spur stem step stir surf swan tank team tide tile tiny tome tool trap trek twin vale vast veil vine void wave wolf wood wren yard zero zone zoom'.split(' '),
+    5: 'laser pixel robot comet orbit space light storm quick blaze cyber flame ghost magic noble ocean power alien amber angel arrow aspen atlas badge beach beast blade blast bleak blink bloom bonus boost brave brick bride brook brush cabin camel candy cargo chain chase chess cliff cloud coral crane crash crown crush cubic dance delta diary doubt draft drift drone eagle earth ember epoch event fable feast fever field fiery flare fleet flint float flood flora focus forge forth frame frost fruit giant glade gleam globe gloom glory grace grain grand grape grasp green grove guard guide happy haven heart hedge honey horse hotel house hover human humor hyper image index inner ivory jewel joust judge juice karma knack kneel latch laugh layer lemon level lilac limit llama lodge logic lucky lunar maple march marsh medal melon merit metal might minor model money motor mount mouse music night ninja nomad north novel nurse oasis olive onion opera otter outer panel patch peace pearl pilot pitch plain plant plaza polar prism proud pulse quake queen quest quiet radar radio raven reach realm relay ridge rival river rocky rough royal rural sable saint scale scene scout sense shade shark sharp shell shift shine shore siege sigma skill slate sleek slope smart smoke snake solar solid sound spark spear speed spice spike spine spoke sport squad stack staff stage stall stamp steam steel stone story sugar suite sunny surge swamp sweet swift sword table talon tempo tenor thorn throw tiger toast token topaz torch totem tower trace track trail train trend tribe trick trout truck trust tulip ultra union unity upper urban usual valid value vapor vault venom verse vigor vinyl viola vivid vocal voice waltz water wheel whale wheat whirl width witch world wrath yacht young youth zebra'.split(' '),
+    6: 'rocket planet galaxy cosmic turret vector plasma bright shadow thrust energy matrix binary dragon knight anchor animal arctic armada autumn badger banner barrel basket beacon beetle bishop blazer bonsai border bottle bridge bronze bubble buffer bundle butter button camera canyon carbon castle cattle cavern census chrome circle cipher clover cobalt coffee column copper corner cosmos cotton crater cruise dagger damage decode desert detect device dinner divide doctor domain double drawer driver effect engine escape falcon family famous farmer fierce finish flight flower forest fossil frozen future garden gentle glider golden gospel gravel guitar hammer harbor hazard helmet hidden hunter hurdle island jungle kernel kitten ladder lagoon lancer launch legend lizard magnet marble market meadow memory mentor meteor mirror mobile modern module molten motion mother muffin museum mystic nectar needle nimbus noodle normal nugget number object ocelot office orange oxygen packet palace parcel pencil pepper photon pillar pirate pocket poetry portal potion powder prince puzzle quartz rabbit random raptor reboot rescue ribbon riddle rubble saddle safari sailor salmon savage scales school screen script search shield signal silent silver simple sketch smooth socket sprint spring square stable static stream strike studio summit sunset switch symbol system tablet talent target temple tennis thrill throne ticket timber tomato tunnel turtle twelve unique unlock valley velvet violet vision volume walnut wander wealth weapon window winter wizard wonder yellow zenith zigzag zipper'.split(' '),
+    7: 'missile defense gravity reactor stellar quantum voltage digital phantom thunder crystal nebulae android antenna archery armored balance balloon banners bandits battery biscuit blanket bonfire bracket brigade buffalo cabinet caliber caravan caribou carrier catalog centaur chamber channel chapter charger chimney circuit citadel clarity climate cluster command compass concert console cottage courage crimson crusher culture current cyclone daggers dolphin dynamic eclipse element empires endless essence evolved explore fabrics factory falcons fantasy farmers feather fiction fighter fortune forward foxhole freedom gallery gateway general glacier glimmer griffin halfway harvest horizon hunters impulse inferno journey kingdom kinetic lantern leopard lessons liberty lizards machine mammoth mariner mastery mission monarch monitor mustang mystery network orchard outpost paladin panther pattern pioneer plateau plunder polaris prairie program project prowler puzzles pyramid radiant rampage rebirth reflect regroup rescuer rippled rumbles sandbox scanner scatter scepter shelter shimmer shuttle skyline soldier spartan sparkle spectre spirits sponsor sprints stadium starlit station steeple stormed stratum success sunrise sunbeam surplus survive tangent tankers terrain tornado tracker trailer trident trumpet turbine typhoon unicorn utility vampire venture victory village voyager warrior wetland whisper wildcat willows winners witches wrangle zealous'.split(' '),
+    8: 'asteroid starship overload keyboard fireball hardware software terminal absolute accurate acrobats activate aircraft airplane alphabet anything backbone backpack baseball bluebird boulders broccoli building bullseye calendar campfire capsules cardinal champion chestnut cinnamon circuits civilian commando compound computer confetti conquest courtesy creature crossbow crusader cupboard daybreak daylight deadline defender demolish dinosaur diplomat discover dolphins doorbell dungeons election engineer entrance envelope equation evidence festival fireside firewall flagship football fortress fountain frontier galactic glimmers goldfish gorgeous graphite guardian harmonic headline heatwave hologram horizons hospital identity infinite inspired instinct interior invasion junction kingdoms landmark lifeboat lighting lockdown magnetic mainland marathon material meltdown midnight mountain mosquito navigate northern notebook obstacle offshore operator ordinary outbound painting paradise parallel passport pendulum phantoms platinum polished pressure princess progress projects property purchase pyramids quickest radiance railroad rainbows reaction reactors recorder reflects relocate remember research reserved resource ricochet riverbed rotation scorpion seashell sentinel shipping sidewalk snowball snowfall spaceman spectrum splinter starfish sterling stickers strategy straight strength sunlight sunshine superior surprise survivor swimming symphony tactical tangible teaching thorough thousand tomorrow training treasure trumpets universe unlocked vacation velocity vertical warpaint waterway weekends wildfire windmill wingspan wireless wizardry workshop wrestler yearbook zeppelin'.split(' '),
+    9: 'satellite explosion adventure challenge dangerous framework catapults abandoned aftermath alligator ambitious anchorage anonymous architect asteroids astronaut avalanche backfield barricade battalion beachhead blackjack blueprint bombarded boomerang breakdown broadcast buccaneer buckskins bulldozer butterfly campfires candlelit cartridge celestial centurion chameleon chocolate cityscape clockwise coastline collision commander companion concerted conquered conductor connected continent crossfire cyberpunk daredevil dashboard detective dimension discovery dragonfly earthling eliminate emergency encounter endeavour engraving equipment evolution excellent explosive fantastic fireworks flamingos flashback fortitude fortunate fractions frontline gargoyles gemstones gladiator grappling graveyard greatness guardians hailstorm headlight heartbeat hurricane illusions immortals incognito innovator interlude invisible kilometer landscape lifeboats lightbulb lockpicks magnitude marauders masterful mechanism meltdowns messenger microchip milestone moonlight mountains navigator nightfall nightmare nocturnal obstacles offensive operation outlander outskirts overlords paintball palisades parachute passenger patriotic periscope phosphate pinnacles pioneered plutonium portrayal prototype quicksand radiation raindrops reactions rebellion recharged resilient resonance revolting rocketeer saturated scavenger scorching scoundrel sentinels shipwreck shockwave slingshot snowdrift soundwave spaceport spacewalk spearhead speedboat starburst starlight submarine supernova surrender surviving swordfish tarantula terminals thrusters transport trapdoors treasures turbulent twilights ultimatum unfolding unleashed unlocking valiantly vengeance vigilante volcanoes wanderers wasteland waterfall whirlwind wolfhound wonderful wormholes yesterday'.split(' ')
+  };
+  const TACTICAL = {
+    SLOW:   { color: '#00e5ff' },
+    EMP:    { color: '#ffd700' },
+    SHIELD: { color: '#39ff6a' }
+  };
+
+  // ---------- Audio ----------
+  let actx = null, muted = false;
+  function audio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (actx && actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(type, f0, f1, dur, vol) {
+    if (muted) return; const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain(), t = a.currentTime;
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur);
+  }
+  const sfx = {
+    pop:   () => { tone('square', 700, 200, 0.14, 0.15); tone('triangle', 1200, 400, 0.1, 0.1); },
+    thud:  () => tone('sawtooth', 110, 30, 0.35, 0.3),
+    miss:  () => tone('square', 160, 120, 0.15, 0.1),
+    power: () => { tone('sine', 400, 1200, 0.3, 0.2); },
+    emp:   () => { tone('sawtooth', 1000, 40, 0.6, 0.25); },
+    over:  () => tone('sawtooth', 300, 40, 1.0, 0.25)
+  };
+
+  // ---------- State ----------
+  const HS_KEY = 'typedefense_high';
+  let state = 'menu'; // menu | play | pause | over
+  let words, particles, lasers, stars, score, combo, maxCombo, lives, level, cleared, spawnTimer, slowUntil, shake, lastT, flashT, bannerT, countdownT, resumeT, bannerLevel, playTime, lastSlow, bombTimer;
+
+  stars = Array.from({ length: 80 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.5 + .3 }));
+
+  function reset() {
+    words = []; particles = []; lasers = [];
+    score = 0; combo = 1; maxCombo = 1; lives = 3; level = 1; cleared = 0;
+    spawnTimer = 0.5; slowUntil = 0; shake = 0; flashT = 0; bannerT = 0; countdownT = 3; resumeT = 0; bannerLevel = 1; playTime = 0; lastSlow = -999; bombTimer = 6;
+  }
+  reset();
+
+  function now() { return performance.now() / 1000; }
+
+  const HUD_H = 96;
+  const LEVEL_WORDS = 12;
+  // Same difficulty on every screen: all fall speeds are tuned for a play area whose drop (spawn line to ground line)
+  // is REF_FALL px tall. On shorter/taller windows speeds are scaled so a word takes the same number of seconds to fall.
+  const REF_FALL = 1200;
+  function fallScale() { return Math.max(250, H - 75 - (HUD_H + 4)) / REF_FALL; }
+  const RESUME_PAUSE = 0.35;   // short beat after the banner disappears, before words move again
+  const BANNER_TIME = 2.8;   // level-up pause (was 1.8s, +1s)
+  // continuous difficulty: rises smoothly with every word cleared (0 at start, +1 per level)
+  // Difficulty ramps fast early, then flattens. Knots (levels completed -> difficulty units):
+  //   start = 0, level 3 starts at 4, level 8 starts at 5, level 11 starts at 5.2 (the old level 9), then +0.2 per level.
+  // (Tuned down after play-testing: the previous level-8 value of 6 made level 9 nearly unplayable.)
+  function diff() { return diffAt(cleared / LEVEL_WORDS); }
+  function diffAt(p) {                         // p = levels completed, fractional
+    if (p <= 2) return p * 2;
+    if (p <= 7) return 4 + (p - 2) * 0.2;
+    if (p < 10) return 5 + (p - 7) * (0.2 / 3);   // levels 8-10: very gentle, so level 11 = old level 9
+    return 5.2 + (p - 10) * 0.2;
+  }
+
+  function pickWord() {
+    // tactical chance ~1/14 per spawn; EMP is the rarest, and never twice in a row on screen
+    if (Math.random() < 1 / 16) {
+      const empOnScreen = words.some(w => w.tactical === 'EMP');
+      const bag = ['SLOW'];
+      if (lives < 3) bag.push('SHIELD', 'SHIELD', 'SHIELD');
+      if (!empOnScreen && level >= 2 && Math.random() < 0.5) bag.push('EMP');
+      let t = bag[Math.floor(Math.random() * bag.length)];
+      // SLOW is limited: at most one per 40s of play, never two on screen
+      if (t === 'SLOW' && (playTime - lastSlow < 40 || words.some(w => w.tactical === 'SLOW'))) t = null;
+      if (t) {
+        if (t === 'SLOW') lastSlow = playTime;
+        return { text: t, color: TACTICAL[t].color, tactical: t };
+      }
+    }
+    const d = diff();
+    const maxLen = Math.min(9, 3 + Math.floor(d / 1.2) + 1);
+    const minLen = Math.min(maxLen, 3 + Math.floor(d / 3));
+    const len = minLen + Math.floor(Math.random() * (maxLen - minLen + 1));
+    const pool = POOLS[len];
+    return { text: pool[Math.floor(Math.random() * pool.length)].toUpperCase(), color: '#e8f0ff', tactical: null };
+  }
+
+  function rollSpeed() {
+    const base = 42 + diffAt(level - 1) * 9;   // fixed per level (start-of-level difficulty)
+    // slowest possible fall speed: 57 px/s at level 5, +1 per level after that (before level 5: 0.7x base)
+    const EARLY = { 1: [30, 74], 2: [43, 98], 3: [50, 112] };   // hand-set fall-speed ranges for levels 1-3
+    const lo = EARLY[level] ? EARLY[level][0] : level >= 5 ? 57 + (level - 5) : base * 0.7;
+    // fastest possible: 122 px/s at level 5, +3 per level after that (before level 5: 1.5x base)
+    const hi = EARLY[level] ? EARLY[level][1] : level >= 5 ? 122 + 3 * (level - 5) : base * 1.5;
+    return lo + Math.random() * (hi - lo);
+  }
+  function textWidth(t) { ctx.font = 'bold 24px "Courier New", monospace'; return ctx.measureText(t).width; }
+
+  const WORD_COLORS = ['#e8f0ff', '#ffe94d', '#5ab0ff', '#6dff8a'];   // white, yellow, blue, green (bombs stay red)
+  function spawn() {
+    let w = pickWord();
+    // never duplicate the text of an active bomb word
+    for (let n = 0; n < 8 && !w.tactical && words.some(o => o.kind === 'bomb' && o.text === w.text); n++) w = pickWord();
+    const width = textWidth(w.text);
+    w.x = 20 + Math.random() * Math.max(10, W - width - 40); w.y = HUD_H + 4; w.width = width;
+    if (!w.tactical) w.color = WORD_COLORS[Math.floor(Math.random() * WORD_COLORS.length)];
+    w.speed = rollSpeed() * (w.tactical === 'EMP' ? 2.6 : w.tactical ? 1.5 : 1);
+    // Some normal words become swaying words INSTEAD (same spawn rate and speed, so no extra difficulty):
+    // 10% at level 3, 20% at level 4, +2.5% per level after that, capped at 35%.
+    const pWave = level < 3 ? 0 : level === 3 ? 0.10 : Math.min(0.35, 0.20 + 0.025 * (level - 4));
+    if (!w.tactical && Math.random() < pWave) makeWave(w);
+    words.push(w);
+  }
+
+  function makeWave(w) {
+    const room = Math.max(0, (W - w.width - 40) / 2);
+    w.kind = 'wave';
+    w.amp = Math.min(40 + Math.random() * 45, room);
+    w.cx = 20 + room + (Math.random() * 2 - 1) * Math.max(0, room - w.amp);
+    w.freq = 1.1 + Math.random() * 0.9; w.phase = Math.random() * 6.28; w.age = 0;
+    w.x = w.cx;
+  }
+
+  // Bomb words arrive IN ADDITION to the normal stream (normal spawn rate/speed is untouched).
+  // A bomb is a red word you must NOT type (typing it resets your combo); harmless if it lands.
+  function spawnExtra(kind) {
+    const len = 4 + Math.floor(Math.random() * 3);
+    let text = null;
+    for (let n = 0; n < 12; n++) {
+      const t = POOLS[len][Math.floor(Math.random() * POOLS[len].length)].toUpperCase();
+      if (!words.some(o => o.text === t)) { text = t; break; }
+    }
+    if (!text) return;
+    const width = textWidth(text);
+    words.push({ text, width, y: HUD_H + 4, speed: rollSpeed(), tactical: null, kind: 'bomb', color: '#ff3355',
+      x: 46 + Math.random() * Math.max(10, W - width - 92) });   // leave room for the bomb icon
+  }
+
+  // ---------- Effects ----------
+  function explode(x, y, color, n = 28) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 240;
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.6 + Math.random() * 0.5, max: 1, color, size: 2 + Math.random() * 3 });
+    }
+  }
+  function laser(x, y, color) { lasers.push({ x, y, life: 0.15, color }); }
+
+  // ---------- Game actions ----------
+  function destroy(w, withCombo) {
+    const pts = w.kind === 'bomb' ? 0 : w.text.length + (withCombo ? combo : 0);
+    score += pts;
+    laser(w.x + w.width / 2, w.y, w.color);
+    explode(w.x + w.width / 2, w.y - 8, w.color);
+    words.splice(words.indexOf(w), 1);
+    return pts;
+  }
+
+  function submit() {
+    const val = input.value.trim().toUpperCase();
+    input.value = '';
+    if (!val) return;
+    const w = words.filter(w => w.text === val).sort((a, b) => b.y - a.y)[0];
+    if (!w) {
+      combo = 1; sfx.miss();
+      input.classList.add('bad'); setTimeout(() => input.classList.remove('bad'), 250);
+      return;
+    }
+    if (w.kind === 'bomb') {                 // typed a bomb: combo back to 1, no life lost
+      combo = 1; shake = 0.25; sfx.thud();
+      explode(w.x + w.width / 2, w.y, '#ff3355', 34);
+      words.splice(words.indexOf(w), 1);
+      input.classList.add('bad'); setTimeout(() => input.classList.remove('bad'), 250);
+      return;
+    }
+    if (w.tactical === 'EMP') {
+      sfx.emp();
+      destroy(w, false);
+      [...words].forEach(o => destroy(o, false));
+      flashT = 0.4; shake = 0.4;
+    } else if (w.tactical === 'SLOW') {
+      sfx.power(); destroy(w, true); slowUntil = now() + 5;
+    } else if (w.tactical === 'SHIELD') {
+      sfx.power(); destroy(w, true); lives = Math.min(3, lives + 1);
+    } else {
+      sfx.pop(); destroy(w, true);
+    }
+    combo = Math.min(10, combo + 1); maxCombo = Math.max(maxCombo, combo);
+    cleared++;
+    const newLevel = 1 + Math.floor(cleared / LEVEL_WORDS);
+    if (newLevel > level) { level = newLevel; bannerLevel = level; bannerT = BANNER_TIME; sfx.power(); }
+  }
+
+  function groundHit(w) {
+    words.splice(words.indexOf(w), 1);
+    if (w.tactical || w.kind === 'bomb') {   // power-ups and bombs are harmless if they land
+      explode(w.x + w.width / 2, H - 72, w.color, 8);
+      tone('sine', 500, 150, 0.15, 0.08);
+      return;
+    }
+    lives--; combo = 1; shake = 0.3; sfx.thud();
+    explode(w.x + w.width / 2, H - 70, '#ff3355', 14);
+    if (lives <= 0) gameOver();
+  }
+
+  const SCORES_KEY = 'typedefense_scores';
+  // Placeholder entries so the list isn't empty on first run (real scores push them out)
+  const DUMMY_SCORES = [['MAX',48,3,'02:10'],['LUNA',42,3,'01:58'],['NOVA',37,2,'01:41'],['PIXEL',31,2,'01:30'],['ZAP',26,2,'01:12'],
+    ['KIRA',21,1,'00:58'],['BOLT',17,1,'00:49'],['TESS',13,1,'00:40'],['OTTO',9,1,'00:31'],['JAY',5,1,'00:22']]
+    .map((d, i) => ({ name: d[0], score: d[1], level: d[2], time: +d[3].slice(0, 2) * 60 + +d[3].slice(3), date: i }));
+  function loadScores() {
+    try {
+      const raw = localStorage.getItem(SCORES_KEY);
+      if (raw === null) { localStorage.setItem(SCORES_KEY, JSON.stringify(DUMMY_SCORES)); return DUMMY_SCORES.slice(); }
+      return JSON.parse(raw) || [];
+    } catch (e) { return []; }
+  }
+  function fmtTime(t) { t = Math.floor(t); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
+  function qualifies(sc) { const l = loadScores(); return startLevel === 1 && sc > 0 && (l.length < 10 || sc > l[l.length - 1].score); }
+  let lastEntry = null;
+
+  function renderScores() {
+    const body = document.querySelector('#scoreTable tbody'); body.innerHTML = '';
+    const list = loadScores();
+    if (!list.length) { const tr = body.insertRow(); const td = tr.insertCell(); td.colSpan = 5; td.textContent = 'No scores yet - go set one!'; return; }
+    list.forEach((e, i) => {
+      const tr = body.insertRow(); if (e === lastEntry || (lastEntry && e.date === lastEntry.date && e.name === lastEntry.name)) tr.className = 'me';
+      [i + 1, e.name, e.score, e.level, fmtTime(e.time)].forEach((v, k) => {
+        const td = tr.insertCell(); td.textContent = v; if (k === 1) td.className = 'name'; if (k === 2) td.className = 'sc';
+      });
+    });
+  }
+  let scoresReturn = 'start';
+  function showScores(from) {
+    scoresReturn = from; renderScores();
+    $(from).classList.add('hidden'); $('scores').classList.remove('hidden');
+  }
+
+  function saveName() {
+    const name = ($('nameInput').value.trim() || 'ANON').toUpperCase().slice(0, 12);
+    const list = loadScores();
+    lastEntry = { name, score: finalStats.score, level: finalStats.level, time: finalStats.time, date: Date.now() };
+    list.push(lastEntry);
+    list.sort((a, b) => b.score - a.score || a.time - b.time);
+    localStorage.setItem(SCORES_KEY, JSON.stringify(list.slice(0, 10)));
+    $('nameEntry').classList.remove('show'); $('againBtn').style.display = '';
+    showScores('over');
+  }
+
+  let finalStats = null;
+  function gameOver() {
+    state = 'over'; sfx.over();
+    finalStats = { score, level: level - 1, time: playTime };
+    $('finalScore').textContent = 'Final Score: ' + score;
+    $('finalLevels').textContent = 'Levels Completed: ' + (level - 1);
+    $('finalTime').textContent = 'Time Elapsed: ' + fmtTime(playTime);
+    $('finalCombo').textContent = 'Max Combo: x' + maxCombo + (startLevel > 1 ? '   (practice from level ' + startLevel + ' - not ranked)' : '');
+    lastEntry = null;
+    if (qualifies(score)) {
+      $('nameEntry').classList.add('show'); $('againBtn').style.display = 'none';
+      $('nameInput').value = '';
+      setTimeout(() => $('nameInput').focus(), 50);
+    } else { $('nameEntry').classList.remove('show'); $('againBtn').style.display = ''; }
+    $('over').classList.remove('hidden');
+  }
+
+  let startLevel = 1;
+  function startGame() {
+    audio(); reset(); state = 'play';
+    startLevel = Math.max(1, Math.min(30, parseInt(document.querySelector('.lvlInput').value) || 1));
+    level = startLevel; cleared = (startLevel - 1) * LEVEL_WORDS;   // jump straight to that level's difficulty
+    $('start').classList.add('hidden'); $('over').classList.add('hidden'); $('scores').classList.add('hidden'); $('pause').classList.add('hidden');
+    input.value = ''; input.focus(); lastT = now();
+  }
+
+  // ---------- Update / draw ----------
+  function update(dt) {
+    if (bannerT > 0 || countdownT > 0 || resumeT > 0) {
+      if (resumeT > 0) resumeT -= dt;
+      else if (countdownT > 0) { const n0 = Math.ceil(countdownT); countdownT -= dt; if (Math.ceil(countdownT) < n0 && countdownT > 0) sfx.power(); }
+      else { bannerT -= dt; if (bannerT <= 0) resumeT = RESUME_PAUSE; }
+      for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; p.life -= dt; }
+      particles = particles.filter(p => p.life > 0);
+      for (const l of lasers) l.life -= dt;
+      lasers = lasers.filter(l => l.life > 0);
+      if (now() < slowUntil) slowUntil += dt; // do not burn SLOW time during the pause
+      return;
+    }
+    playTime += dt;
+    const slowed = now() < slowUntil;
+    const mult = slowed ? 0.35 : 1;
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawn();
+      // average gap: 1.59s at level 5, 0.02s shorter each level after (before level 5: follows the difficulty curve)
+      const EARLY_GAP = { 1: 2.20, 2: 1.90, 3: 1.70 };   // hand-set for levels 1-3
+      const gap = EARLY_GAP[level] || (level >= 5 ? 1.59 - 0.02 * (level - 5) : 2.2 - diffAt(level - 1) * 0.14);
+      spawnTimer = Math.max(0.6, gap) * (0.7 + Math.random() * 0.6);
+    }
+    if (level >= 3) {                       // bombs from level 3 (max 2 on screen)
+      bombTimer -= dt;
+      if (bombTimer <= 0) { if (words.filter(o => o.kind === 'bomb').length < 2) spawnExtra('bomb'); bombTimer = (14 - Math.min(level - 3, 6)) * (0.7 + Math.random() * 0.6); }
+    }
+    for (const w of [...words]) {
+      if (w.kind === 'wave') { w.age += dt * mult; w.x = w.cx + w.amp * Math.sin(w.freq * w.age + w.phase); }
+      w.y += w.speed * fallScale() * mult * dt;
+      if (w.y >= H - 75) { groundHit(w); if (state !== 'play') return; }
+    }
+    for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; p.life -= dt; }
+    particles = particles.filter(p => p.life > 0);
+    for (const l of lasers) l.life -= dt;
+    lasers = lasers.filter(l => l.life > 0);
+    shake = Math.max(0, shake - dt); flashT = Math.max(0, flashT - dt);
+  }
+
+  function heart(x, y, s, fill) {
+    ctx.save(); ctx.translate(x, y); ctx.beginPath();
+    ctx.moveTo(0, s * .3);
+    ctx.bezierCurveTo(-s, -s * .5, -s * .4, -s, 0, -s * .35);
+    ctx.bezierCurveTo(s * .4, -s, s, -s * .5, 0, s * .3);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = '#ff3355'; ctx.shadowColor = '#ff3355'; ctx.shadowBlur = 10; ctx.fill(); }
+    else { ctx.strokeStyle = '#663344'; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.restore();
+  }
+
+  // ---------- Background (static layer cached; subtle animation on top) ----------
+  function buildBg() {
+    const d = window.devicePixelRatio || 1, hz = H - 72;
+    bg = document.createElement('canvas'); bg.width = W * d; bg.height = H * d;
+    const g = bg.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+    // sky gradient
+    let gr = g.createLinearGradient(0, 0, 0, hz);
+    gr.addColorStop(0, '#04050d'); gr.addColorStop(.55, '#0b0a24'); gr.addColorStop(1, '#2a0f3a');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    // nebula blobs
+    const blob = (x, y, r, c) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); };
+    blob(W * .2, hz * .35, Math.max(W, H) * .35, 'rgba(90,40,160,.22)');
+    blob(W * .8, hz * .2, Math.max(W, H) * .3, 'rgba(0,120,170,.16)');
+    // retro sun with stripes, sitting on the horizon
+    const sr = Math.min(W, hz) * .26, sx = W / 2, sy = hz - sr * .15;
+    gr = g.createLinearGradient(0, sy - sr, 0, sy + sr);
+    gr.addColorStop(0, 'rgba(255,200,80,.30)'); gr.addColorStop(1, 'rgba(255,40,120,.30)');
+    g.save(); g.beginPath(); g.rect(0, 0, W, hz); g.clip();
+    g.fillStyle = gr; g.beginPath(); g.arc(sx, sy, sr, 0, Math.PI * 2); g.fill();
+    g.restore();
+    // stripes: repaint sky colour bands over the lower sun
+    g.save(); g.beginPath(); g.rect(0, 0, W, hz); g.clip();
+    for (let i = 0; i < 7; i++) {
+      const y = sy + sr * (.05 + i * .13), h = 2 + i * 1.6;
+      g.fillStyle = '#1d0c33'; g.fillRect(sx - sr, y, sr * 2, h);
+    }
+    g.restore();
+    // city skyline silhouette
+    let x = 0; g.fillStyle = '#080714';
+    let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    while (x < W) {
+      const bw = 24 + rnd() * 46, bh = 18 + rnd() * Math.min(110, hz * .2);
+      g.fillStyle = '#080714'; g.fillRect(x, hz - bh, bw, bh);
+      g.fillStyle = 'rgba(127,255,212,.18)';
+      for (let wy = hz - bh + 6; wy < hz - 4; wy += 9) for (let wx = x + 4; wx < x + bw - 5; wx += 8) if (rnd() < .22) g.fillRect(wx, wy, 2, 3);
+      x += bw + 2;
+    }
+    // ground
+    g.fillStyle = '#07061a'; g.fillRect(0, hz, W, H - hz);
+  }
+
+  function drawBg(t) {
+    if (!bg) buildBg();
+    ctx.drawImage(bg, 0, 0, W, H);
+    const hz = H - 72;
+    // twinkling stars (upper sky only)
+    for (const s of stars) {
+      const tw = .35 + .65 * Math.abs(Math.sin(t * (.6 + s.s) + s.x * 40));
+      ctx.fillStyle = `rgba(200,220,255,${.5 * tw})`;
+      ctx.fillRect(s.x * W, s.y * hz * .85, s.s, s.s);
+    }
+    // scrolling perspective grid on the ground strip
+    ctx.save(); ctx.beginPath(); ctx.rect(0, hz, W, H - hz); ctx.clip();
+    ctx.strokeStyle = 'rgba(127,255,212,.22)'; ctx.lineWidth = 1;
+    for (let i = -14; i <= 14; i++) { ctx.beginPath(); ctx.moveTo(W / 2 + i * 14, hz); ctx.lineTo(W / 2 + i * W * .12, H); ctx.stroke(); }
+    const off = (t * .5) % 1;
+    for (let i = 0; i < 6; i++) {
+      const k = (i + off) / 6, y = hz + (H - hz) * k * k;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.save();
+    ctx.fillStyle = '#05060f'; ctx.fillRect(0, 0, W, H);
+    if (shake > 0) ctx.translate((Math.random() - .5) * 10 * shake * 3, (Math.random() - .5) * 10 * shake * 3);
+
+    drawBg(now());
+
+    // retro grid floor line
+    ctx.strokeStyle = '#7fffd4'; ctx.globalAlpha = .4; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, H - 72); ctx.lineTo(W, H - 72); ctx.stroke(); ctx.globalAlpha = 1;
+
+    // input partial match
+    const typed = input.value.toUpperCase();
+
+    // words
+    ctx.font = 'bold 24px "Courier New", monospace'; ctx.textBaseline = 'top';
+    for (const w of words) {
+      ctx.shadowColor = w.color; ctx.shadowBlur = w.tactical ? 14 : 6;
+      const match = typed && w.kind !== 'bomb' && w.text.startsWith(typed);
+      if (w.kind === 'bomb') {
+        const pulse = .6 + .4 * Math.sin(now() * 8);
+        ctx.shadowBlur = 8 + 10 * pulse;
+        ctx.fillStyle = '#ff3355'; ctx.fillText(w.text, w.x, w.y);
+        ctx.shadowBlur = 0;                                   // bomb icon
+        ctx.fillStyle = '#1a0a10'; ctx.strokeStyle = '#ff3355'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(w.x - 16, w.y + 14, 8, 0, 6.29); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w.x - 12, w.y + 8); ctx.lineTo(w.x - 8, w.y + 2); ctx.stroke();
+        ctx.fillStyle = pulse > .7 ? '#ffd700' : '#ff8800'; ctx.fillRect(w.x - 9, w.y - 1, 4, 4);
+      } else {
+        ctx.fillStyle = w.color; ctx.fillText(w.text, w.x, w.y);
+        if (w.tactical) {                                   // power-ups get a box so they stand out from coloured words
+          ctx.shadowBlur = 0; ctx.strokeStyle = w.color; ctx.lineWidth = 2;
+          ctx.strokeRect(w.x - 6, w.y - 3, w.width + 12, 30);
+        }
+        if (match) {                                        // underline the letters typed so far
+          const mw = ctx.measureText(w.text.slice(0, typed.length)).width;
+          ctx.shadowBlur = 0; ctx.fillStyle = '#ffffff'; ctx.fillRect(w.x, w.y + 27, mw, 3);
+        }
+      }
+    }
+    ctx.shadowBlur = 0;
+
+    // turret
+    const tx = W / 2, ty = H - 72;
+    ctx.fillStyle = '#7fffd4'; ctx.shadowColor = '#7fffd4'; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.moveTo(tx - 22, ty); ctx.lineTo(tx - 8, ty - 22); ctx.lineTo(tx + 8, ty - 22); ctx.lineTo(tx + 22, ty); ctx.closePath(); ctx.fill();
+    ctx.fillRect(tx - 3, ty - 34, 6, 14); ctx.shadowBlur = 0;
+
+    // lasers
+    for (const l of lasers) {
+      ctx.strokeStyle = l.color; ctx.lineWidth = 3; ctx.shadowColor = l.color; ctx.shadowBlur = 14;
+      ctx.globalAlpha = l.life / .15;
+      ctx.beginPath(); ctx.moveTo(tx, ty - 34); ctx.lineTo(l.x, l.y + 12); ctx.stroke();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+    // particles
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // EMP flash
+    if (flashT > 0) { ctx.fillStyle = `rgba(255,215,0,${flashT})`; ctx.fillRect(0, 0, W, H); }
+    // slow tint
+    if (now() < slowUntil && state === 'play') { ctx.fillStyle = 'rgba(0,229,255,.07)'; ctx.fillRect(0, 0, W, H); }
+    ctx.restore();
+
+    // start countdown (3, 2, 1)
+    if (countdownT > 0 && state === 'play') {
+      const f = countdownT % 1;   // 1 -> 0 within each second
+      ctx.fillStyle = 'rgba(5,6,15,.45)'; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#7fffd4'; ctx.shadowBlur = 40; ctx.fillStyle = '#e6fff6';
+      ctx.globalAlpha = Math.min(1, f * 3 + 0.3);
+      ctx.font = 'bold ' + Math.min(260, W / 3.2) * (0.85 + 0.15 * f) + 'px "Courier New", monospace';
+      ctx.fillText(String(Math.ceil(countdownT)), W / 2, H / 2);
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.textAlign = 'left';
+    }
+
+    // level banner
+    if (bannerT > 0 && state === 'play') {
+      const a = Math.min(1, bannerT / 0.4, (BANNER_TIME - bannerT) / 0.2);
+      ctx.fillStyle = `rgba(5,6,15,${0.55 * a})`; ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#c0a0ff'; ctx.shadowBlur = 30; ctx.fillStyle = '#e6d9ff';
+      ctx.font = 'bold ' + Math.min(110, W / 7) + 'px "Courier New", monospace';
+      ctx.fillText('LEVEL ' + bannerLevel, W / 2, H / 2 - 20);
+      ctx.shadowBlur = 0; ctx.font = 'bold 22px "Courier New", monospace'; ctx.fillStyle = '#7fffd4';
+      ctx.fillText('Faster & longer words incoming...', W / 2, H / 2 + 50);
+      ctx.globalAlpha = 1; ctx.textAlign = 'left';
+    }
+
+    // HUD (no shake)
+    ctx.fillStyle = 'rgba(5,6,15,.8)'; ctx.fillRect(0, 0, W, HUD_H);
+    ctx.strokeStyle = '#7fffd444'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, HUD_H + .5); ctx.lineTo(W, HUD_H + .5); ctx.stroke();
+    ctx.textBaseline = 'middle'; ctx.shadowBlur = 0; ctx.textAlign = 'left';
+    const hy = HUD_H / 2 - 4;
+    const secs = Math.floor(playTime), mm = String(Math.floor(secs / 60)).padStart(2, '0'), ss = String(secs % 60).padStart(2, '0');
+    const items = [
+      { t: 'SCORE ' + score, ref: 'SCORE 99999', c: '#7fffd4' },
+      { t: 'COMBO x' + combo, ref: 'COMBO x10', c: '#ffd700', flash: combo >= 10 },
+      { t: 'LEVEL ' + level, ref: 'LEVEL 99', c: '#c0a0ff' },
+      { t: 'TIME ' + mm + ':' + ss, ref: 'TIME 99:59', c: '#7fffd4' }
+    ];
+    const heartsW = 185;
+    let f = 30, gap = 0;   // shrink the font if the window is narrow, spread items evenly
+    for (; f >= 14; f -= 2) {
+      ctx.font = 'bold ' + f + 'px "Courier New", monospace';
+      const total = items.reduce((a, it) => a + ctx.measureText(it.ref).width, 0);
+      gap = (W - 20 - heartsW - 10 - total) / (items.length - 1);
+      if (gap >= 18) break;
+    }
+    // slot widths come from the widest plausible text so items don't shift as numbers grow
+    let x = 20;
+    for (const it of items) {
+      const w = ctx.measureText(it.ref).width;
+      ctx.fillStyle = it.c;
+      if (!it.flash || Math.floor(now() * 4) % 2 === 0) {   // combo flashes on/off at max
+        if (it.flash) { ctx.shadowColor = it.c; ctx.shadowBlur = 16; }
+        ctx.fillText(it.t, x, hy); ctx.shadowBlur = 0;
+      }
+      x += w + Math.max(18, gap);
+    }
+    if (now() < slowUntil && state === 'play') {
+      ctx.font = 'bold 18px "Courier New", monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#00e5ff'; ctx.fillText('SLOW ' + Math.ceil(slowUntil - now()) + 's', W * .5, HUD_H - 14);
+      ctx.textAlign = 'left';
+    }
+    for (let i = 0; i < 3; i++) heart(W - 125 + i * 42, hy + 2, 17, i < lives);
+    ctx.textAlign = 'left';
+  }
+
+  function loop() {
+    const t = now(); const dt = Math.min(0.05, t - lastT); lastT = t;
+    if (state === 'play') update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  lastT = now(); loop();
+
+  // ---------- Input ----------
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); if (state === 'play' && bannerT <= 0 && countdownT <= 0 && resumeT <= 0) submit(); else input.value = ''; }
+  });
+  input.addEventListener('input', () => { input.value = input.value.replace(/[^a-zA-Z]/g, ''); });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (state === 'play') { state = 'pause'; $('pause').classList.remove('hidden'); }
+      else if (state === 'pause') { state = 'play'; lastT = now(); $('pause').classList.add('hidden'); input.focus(); }
+    }
+    if (e.key === 'Tab' && state === 'play') { e.preventDefault(); muted = !muted; }
+  });
+  // keep input focused at all times during play
+  document.addEventListener('mousedown', e => { if (state === 'play' && e.target !== input) { e.preventDefault(); input.focus(); } });
+  input.addEventListener('blur', () => { if (state === 'play') setTimeout(() => input.focus(), 0); });
+  setInterval(() => { if (state === 'play' && document.activeElement !== input) input.focus(); }, 300);
+
+  document.querySelectorAll('.lvlInput').forEach(el => {
+    el.addEventListener('input', () => document.querySelectorAll('.lvlInput').forEach(o => { if (o !== el) o.value = el.value; }));
+    el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') startGame(); });
+  });
+  $('startBtn').addEventListener('click', startGame);
+  $('againBtn').addEventListener('click', startGame);
+  $('scoresBtn1').addEventListener('click', () => showScores('start'));
+  $('scoresBtn2').addEventListener('click', () => showScores('over'));
+  $('backBtn').addEventListener('click', () => { $('scores').classList.add('hidden'); $(scoresReturn).classList.remove('hidden'); });
+  $('saveBtn').addEventListener('click', saveName);
+  $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); saveName(); } });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (state === 'menu' || state === 'over') && $('scores').classList.contains('hidden') && !$('nameEntry').classList.contains('show')) startGame();
+  });
+  input.focus();
+})();
+</script>
+</body>
+</html>
