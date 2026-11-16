@@ -168,9 +168,9 @@
   function diff() { return diffAt(cleared / LEVEL_WORDS); }
   function diffAt(p) {                         // p = levels completed, fractional
     if (p <= 2) return p * 2;
-    if (p <= 7) return 4 + (p - 2) * 0.2;
-    if (p < 10) return 5 + (p - 7) * (0.2 / 3);   // levels 8-10: very gentle, so level 11 = old level 9
-    return 5.2 + (p - 10) * 0.2;
+    if (p <= 4) return 4 + (p - 2) * 0.2;
+    if (p <= 8) return 4.4 + (p - 4) * 0.25;      // levels 5-9: steady climb from level 4 to level 9
+    return 5.4 + (p - 8) * 0.25;
   }
 
   function pickWord() {
@@ -200,9 +200,9 @@
     const base = 42 + diffAt(level - 1) * 9;   // fixed per level (start-of-level difficulty)
     // slowest possible fall speed: 57 px/s at level 5, +1 per level after that (before level 5: 0.7x base)
     const EARLY = { 1: [30, 74], 2: [43, 98], 3: [50, 112] };   // hand-set fall-speed ranges for levels 1-3
-    const lo = EARLY[level] ? EARLY[level][0] : level >= 5 ? 57 + (level - 5) : base * 0.7;
+    const lo = EARLY[level] ? EARLY[level][0] : level >= 5 ? 56 + 1.6 * (level - 4) : base * 0.7;
     // fastest possible: 122 px/s at level 5, +3 per level after that (before level 5: 1.5x base)
-    const hi = EARLY[level] ? EARLY[level][1] : level >= 5 ? 122 + 3 * (level - 5) : base * 1.5;
+    const hi = EARLY[level] ? EARLY[level][1] : level >= 5 ? 120 + 4.6 * (level - 4) : base * 1.5;
     return lo + Math.random() * (hi - lo);
   }
   function textWidth(t) { ctx.font = 'bold 24px "Courier New", monospace'; return ctx.measureText(t).width; }
@@ -218,7 +218,7 @@
     w.speed = rollSpeed() * (w.tactical === 'EMP' ? 2.6 : w.tactical ? 1.5 : 1);
     // Some normal words become swaying words INSTEAD (same spawn rate and speed, so no extra difficulty):
     // 10% at level 3, 20% at level 4, +2.5% per level after that, capped at 35%.
-    const pWave = level < 3 ? 0 : level === 3 ? 0.10 : Math.min(0.35, 0.20 + 0.025 * (level - 4));
+    const pWave = level < 3 ? 0 : level === 3 ? 0.10 : Math.min(0.5, 0.20 + 0.03 * (level - 4));
     if (!w.tactical && Math.random() < pWave) makeWave(w);
     words.push(w);
   }
@@ -402,14 +402,14 @@
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       spawn();
-      // average gap: 1.59s at level 5, 0.02s shorter each level after (before level 5: follows the difficulty curve)
+      // average gap: 1.61s at level 4, 0.032s shorter each level after, floor 0.6s (levels 1-3 are hand-set)
       const EARLY_GAP = { 1: 2.20, 2: 1.90, 3: 1.70 };   // hand-set for levels 1-3
-      const gap = EARLY_GAP[level] || (level >= 5 ? 1.59 - 0.02 * (level - 5) : 2.2 - diffAt(level - 1) * 0.14);
+      const gap = EARLY_GAP[level] || (level >= 5 ? 1.61 - 0.032 * (level - 4) : 2.2 - diffAt(level - 1) * 0.14);
       spawnTimer = Math.max(0.6, gap) * (0.7 + Math.random() * 0.6);
     }
     if (level >= 3) {                       // bombs from level 3 (max 2 on screen)
       bombTimer -= dt;
-      if (bombTimer <= 0) { if (words.filter(o => o.kind === 'bomb').length < 2) spawnExtra('bomb'); bombTimer = (14 - Math.min(level - 3, 6)) * (0.7 + Math.random() * 0.6); }
+      if (bombTimer <= 0) { if (words.filter(o => o.kind === 'bomb').length < 2) spawnExtra('bomb'); bombTimer = Math.max(5, 14 - (level - 3)) * (0.7 + Math.random() * 0.6); }
     }
     for (const w of [...words]) {
       if (w.kind === 'wave') { w.age += dt * mult; w.x = w.cx + w.amp * Math.sin(w.freq * w.age + w.phase); }
